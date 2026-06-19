@@ -5,7 +5,12 @@ const { pool } = require('../db');
 const router = express.Router();
 
 function publicUser(u) {
-  return { id: u.id, username: u.username, displayName: u.display_name };
+  return { id: u.id, username: u.username, displayName: u.display_name, theme: u.theme };
+}
+
+function requireLogin(req, res, next) {
+  if (!req.session.userId) return res.status(401).json({ error: 'Not logged in.' });
+  next();
 }
 
 router.post('/register', async (req, res, next) => {
@@ -62,6 +67,56 @@ router.get('/me', async (req, res, next) => {
     const user = result.rows[0];
     if (!user) return res.status(401).json({ error: 'Not logged in.' });
     res.json({ user: publicUser(user) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/profile', requireLogin, async (req, res, next) => {
+  try {
+    const { displayName } = req.body || {};
+    if (!displayName || !String(displayName).trim()) {
+      return res.status(400).json({ error: 'Display name is required.' });
+    }
+    const result = await pool.query('UPDATE users SET display_name = $1 WHERE id = $2 RETURNING *', [
+      String(displayName).trim(),
+      req.session.userId,
+    ]);
+    res.json({ user: publicUser(result.rows[0]) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/theme', requireLogin, async (req, res, next) => {
+  try {
+    const { theme } = req.body || {};
+    if (theme !== 'light' && theme !== 'dark') return res.status(400).json({ error: 'Invalid theme.' });
+    const result = await pool.query('UPDATE users SET theme = $1 WHERE id = $2 RETURNING *', [
+      theme,
+      req.session.userId,
+    ]);
+    res.json({ user: publicUser(result.rows[0]) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/change-password', requireLogin, async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'Current password and a new password (6+ chars) are required.' });
+    }
+
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.userId]);
+    const user = result.rows[0];
+    const ok = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Current password is incorrect.' });
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, user.id]);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

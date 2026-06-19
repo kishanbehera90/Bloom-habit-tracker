@@ -7,6 +7,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { pool, init } = require('./db');
 const authRoutes = require('./routes/auth');
 const habitRoutes = require('./routes/habits');
+const todoRoutes = require('./routes/todos');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,6 +32,7 @@ app.use(
 
 app.use('/api/auth', authRoutes);
 app.use('/api/habits', habitRoutes);
+app.use('/api/todos', todoRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
