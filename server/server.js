@@ -1,23 +1,22 @@
 const path = require('path');
-const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
-const SqliteSessionStore = require('./sessionStore');
-require('dotenv').config();
+const pgSession = require('connect-pg-simple')(session);
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+const { pool, init } = require('./db');
 const authRoutes = require('./routes/auth');
 const habitRoutes = require('./routes/habits');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const dataDir = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+app.set('trust proxy', 1);
 
 app.use(express.json());
 app.use(
   session({
-    store: new SqliteSessionStore({ dataDir }),
+    store: new pgSession({ pool, createTableIfMissing: true }),
     secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
     resave: false,
     saveUninitialized: false,
@@ -43,6 +42,13 @@ app.get('/', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Bloom habit tracker running on http://localhost:${PORT}`);
-});
+init()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Bloom habit tracker running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to initialize database:', err);
+    process.exit(1);
+  });

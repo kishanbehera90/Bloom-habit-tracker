@@ -1,5 +1,5 @@
 const express = require('express');
-const db = require('../db');
+const { pool } = require('../db');
 
 const router = express.Router();
 
@@ -9,10 +9,10 @@ function requireLogin(req, res, next) {
 }
 router.use(requireLogin);
 
-function withHistory(habit) {
-  const rows = db.prepare('SELECT date_key FROM completions WHERE habit_id = ?').all(habit.id);
+async function withHistory(habit) {
+  const result = await pool.query('SELECT date_key FROM completions WHERE habit_id = $1', [habit.id]);
   const history = {};
-  rows.forEach((r) => (history[r.date_key] = true));
+  result.rows.forEach((r) => (history[r.date_key] = true));
   return {
     id: String(habit.id),
     name: habit.name,
@@ -24,32 +24,41 @@ function withHistory(habit) {
   };
 }
 
-router.get('/', (req, res) => {
-  const habits = db
-    .prepare('SELECT * FROM habits WHERE user_id = ? ORDER BY created_at ASC')
-    .all(req.session.userId);
-  res.json({ habits: habits.map(withHistory) });
+router.get('/', async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT * FROM habits WHERE user_id = $1 ORDER BY created_at ASC', [
+      req.session.userId,
+    ]);
+    const habits = await Promise.all(result.rows.map(withHistory));
+    res.json({ habits });
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.post('/', (req, res) => {
-  const { name, category, icon, targetPerWeek } = req.body || {};
-  if (!name || !String(name).trim()) return res.status(400).json({ error: 'Habit name is required.' });
+router.post('/', async (req, res, next) => {
+  try {
+    const { name, category, icon, targetPerWeek } = req.body || {};
+    if (!name || !String(name).trim()) return res.status(400).json({ error: 'Habit name is required.' });
 
-  const freq = Math.min(7, Math.max(1, parseInt(targetPerWeek, 10) || 1));
-  const info = db
-    .prepare(
-      'INSERT INTO habits (user_id, name, category, icon, target_per_week) VALUES (?, ?, ?, ?, ?)'
-    )
-    .run(req.session.userId, String(name).trim(), category || 'Custom', icon || '🌟', freq);
+    const freq = Math.min(7, Math.max(1, parseInt(targetPerWeek, 10) || 1));
+    const result = await pool.query(
+      'INSERT INTO habits (user_id, name, category, icon, target_per_week) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [req.session.userId, String(name).trim(), category || 'Custom', icon || '🌟', freq]
+    );
 
-  const habit = db.prepare('SELECT * FROM habits WHERE id = ?').get(info.lastInsertRowid);
-  res.status(201).json({ habit: withHistory(habit) });
+    res.status(201).json({ habit: await withHistory(result.rows[0]) });
+  } catch (err) {
+    next(err);
+  }
 });
 
-function getOwnedHabit(req, res) {
-  const habit = db
-    .prepare('SELECT * FROM habits WHERE id = ? AND user_id = ?')
-    .get(req.params.id, req.session.userId);
+async function getOwnedHabit(req, res) {
+  const result = await pool.query('SELECT * FROM habits WHERE id = $1 AND user_id = $2', [
+    req.params.id,
+    req.session.userId,
+  ]);
+  const habit = result.rows[0];
   if (!habit) {
     res.status(404).json({ error: 'Habit not found.' });
     return null;
@@ -57,49 +66,64 @@ function getOwnedHabit(req, res) {
   return habit;
 }
 
-router.put('/:id', (req, res) => {
-  const habit = getOwnedHabit(req, res);
-  if (!habit) return;
+router.put('/:id', async (req, res, next) => {
+  try {
+    const habit = await getOwnedHabit(req, res);
+    if (!habit) return;
 
-  const { name, category, icon, targetPerWeek } = req.body || {};
-  const freq = Math.min(7, Math.max(1, parseInt(targetPerWeek, 10) || habit.target_per_week));
+    const { name, category, icon, targetPerWeek } = req.body || {};
+    const freq = Math.min(7, Math.max(1, parseInt(targetPerWeek, 10) || habit.target_per_week));
 
-  db.prepare('UPDATE habits SET name = ?, category = ?, icon = ?, target_per_week = ? WHERE id = ?').run(
-    name ? String(name).trim() : habit.name,
-    category || habit.category,
-    icon || habit.icon,
-    freq,
-    habit.id
-  );
+    const result = await pool.query(
+      'UPDATE habits SET name = $1, category = $2, icon = $3, target_per_week = $4 WHERE id = $5 RETURNING *',
+      [
+        name ? String(name).trim() : habit.name,
+        category || habit.category,
+        icon || habit.icon,
+        freq,
+        habit.id,
+      ]
+    );
 
-  const updated = db.prepare('SELECT * FROM habits WHERE id = ?').get(habit.id);
-  res.json({ habit: withHistory(updated) });
-});
-
-router.delete('/:id', (req, res) => {
-  const habit = getOwnedHabit(req, res);
-  if (!habit) return;
-  db.prepare('DELETE FROM habits WHERE id = ?').run(habit.id);
-  res.json({ ok: true });
-});
-
-router.post('/:id/toggle', (req, res) => {
-  const habit = getOwnedHabit(req, res);
-  if (!habit) return;
-
-  const dateKey = (req.body && req.body.dateKey) || new Date().toISOString().slice(0, 10);
-  const existing = db
-    .prepare('SELECT id FROM completions WHERE habit_id = ? AND date_key = ?')
-    .get(habit.id, dateKey);
-
-  if (existing) {
-    db.prepare('DELETE FROM completions WHERE id = ?').run(existing.id);
-  } else {
-    db.prepare('INSERT INTO completions (habit_id, date_key) VALUES (?, ?)').run(habit.id, dateKey);
+    res.json({ habit: await withHistory(result.rows[0]) });
+  } catch (err) {
+    next(err);
   }
+});
 
-  const updated = db.prepare('SELECT * FROM habits WHERE id = ?').get(habit.id);
-  res.json({ habit: withHistory(updated) });
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const habit = await getOwnedHabit(req, res);
+    if (!habit) return;
+    await pool.query('DELETE FROM habits WHERE id = $1', [habit.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/toggle', async (req, res, next) => {
+  try {
+    const habit = await getOwnedHabit(req, res);
+    if (!habit) return;
+
+    const dateKey = (req.body && req.body.dateKey) || new Date().toISOString().slice(0, 10);
+    const existing = await pool.query('SELECT id FROM completions WHERE habit_id = $1 AND date_key = $2', [
+      habit.id,
+      dateKey,
+    ]);
+
+    if (existing.rows.length) {
+      await pool.query('DELETE FROM completions WHERE id = $1', [existing.rows[0].id]);
+    } else {
+      await pool.query('INSERT INTO completions (habit_id, date_key) VALUES ($1, $2)', [habit.id, dateKey]);
+    }
+
+    const updated = await pool.query('SELECT * FROM habits WHERE id = $1', [habit.id]);
+    res.json({ habit: await withHistory(updated.rows[0]) });
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;
