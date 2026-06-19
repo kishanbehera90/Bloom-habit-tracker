@@ -1,7 +1,7 @@
 {
-  "name": "bloom-habit-tracker",
+  "name": "thrive-habit-tracker",
   "version": "1.0.0",
-  "description": "Personal Habit & Wellness Dashboard with Express + SQLite backend",
+  "description": "Personal Habit & Wellness Dashboard with Express + Postgres backend",
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
