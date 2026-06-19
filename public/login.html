@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bloom — Sign In</title>
+<style>
+  :root{
+    --bg: #f7f3ec;
+    --card: #ffffff;
+    --card-soft: #fbf8f3;
+    --sage: #a8c3a0;
+    --sage-dark: #7fa377;
+    --orange: #f3a86b;
+    --orange-soft: #fde3c8;
+    --ink: #2c2a26;
+    --ink-soft: #6f6a60;
+    --ink-faint: #a59f93;
+    --border: #ece5d8;
+    --radius-lg: 28px;
+    --radius-sm: 14px;
+    --shadow-soft: 0 10px 30px rgba(60,50,30,0.06), 0 2px 8px rgba(60,50,30,0.04);
+    --shadow-hover: 0 18px 40px rgba(60,50,30,0.10), 0 4px 12px rgba(60,50,30,0.06);
+    --grad-sage: linear-gradient(135deg, #b7d2ae 0%, #8fb286 100%);
+    --grad-orange: linear-gradient(135deg, #f6c08b 0%, #ee9c5c 100%);
+    --font: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background: var(--bg);
+    font-family: var(--font);
+    color: var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh;
+    padding: 20px;
+  }
+  .wrap{ width:420px; max-width:100%; }
+  .brand{ display:flex; align-items:center; gap:12px; justify-content:center; margin-bottom:28px; }
+  .brand .logo{
+    width:46px; height:46px; border-radius:14px;
+    background: var(--grad-sage);
+    display:flex; align-items:center; justify-content:center; font-size:22px;
+    box-shadow: var(--shadow-soft);
+  }
+  .brand h1{ font-size:22px; font-weight:800; }
+  .card{
+    background: var(--card);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--border);
+  }
+  .tabs{ display:flex; gap:6px; background: var(--card-soft); border-radius: var(--radius-sm); padding:4px; margin-bottom:24px; }
+  .tab{ flex:1; text-align:center; padding:10px; border-radius:10px; font-weight:700; font-size:13.5px; cursor:pointer; color: var(--ink-soft); transition: all .2s; }
+  .tab.active{ background: var(--card); color: var(--sage-dark); box-shadow: var(--shadow-soft); }
+  h2{ font-size:19px; font-weight:800; margin-bottom:4px; }
+  .sub{ color: var(--ink-soft); font-size:13px; margin-bottom:20px; }
+  .field{ margin-bottom:16px; }
+  .field label{ font-size:12.5px; font-weight:700; color: var(--ink-soft); display:block; margin-bottom:6px; }
+  .field input{
+    width:100%; padding: 12px 14px; border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border); font-size:14px; font-family: var(--font);
+    background: var(--card-soft); outline:none; transition: border-color .2s;
+  }
+  .field input:focus{ border-color: var(--sage); }
+  .btn-primary{
+    width:100%; border:none; cursor:pointer;
+    background: var(--grad-orange); color:#fff; font-weight:800; font-size:14px;
+    padding: 13px; border-radius: var(--radius-sm);
+    box-shadow: 0 8px 20px rgba(238,156,92,0.35);
+    transition: transform .2s, box-shadow .2s;
+    margin-top: 6px;
+  }
+  .btn-primary:hover{ transform: translateY(-2px); box-shadow: 0 12px 26px rgba(238,156,92,0.45); }
+  .btn-primary:disabled{ opacity:0.6; cursor:default; transform:none; }
+  .error-box{
+    background: #fdeee8; color:#b0502c; border:1px solid #f6cdb8;
+    border-radius: var(--radius-sm); padding:10px 14px; font-size:12.5px; font-weight:600;
+    margin-bottom:16px; display:none;
+  }
+  .error-box.show{ display:block; }
+  .foot-note{ text-align:center; color: var(--ink-faint); font-size:12px; margin-top:20px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo">🌿</div>
+      <h1>Bloom</h1>
+    </div>
+    <div class="card">
+      <div class="tabs">
+        <div class="tab active" data-mode="login">Sign In</div>
+        <div class="tab" data-mode="register">Create Account</div>
+      </div>
+
+      <h2 id="formTitle">Welcome back</h2>
+      <p class="sub" id="formSub">Sign in to continue your wellness journey.</p>
+
+      <div class="error-box" id="errorBox"></div>
+
+      <form id="authForm">
+        <div class="field" id="displayNameField" style="display:none;">
+          <label>Display Name</label>
+          <input type="text" id="displayName" placeholder="What should we call you?">
+        </div>
+        <div class="field">
+          <label>Username</label>
+          <input type="text" id="username" placeholder="e.g. kishan" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-primary" id="submitBtn">Sign In</button>
+      </form>
+
+      <p class="foot-note" id="footNote">New here? Switch to "Create Account" above.</p>
+    </div>
+  </div>
+
+<script>
+  let mode = 'login';
+  const tabs = document.querySelectorAll('.tab');
+  const form = document.getElementById('authForm');
+  const errorBox = document.getElementById('errorBox');
+  const displayNameField = document.getElementById('displayNameField');
+  const formTitle = document.getElementById('formTitle');
+  const formSub = document.getElementById('formSub');
+  const submitBtn = document.getElementById('submitBtn');
+  const footNote = document.getElementById('footNote');
+
+  function setMode(m){
+    mode = m;
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.mode === m));
+    errorBox.classList.remove('show');
+    if(m === 'login'){
+      displayNameField.style.display = 'none';
+      formTitle.textContent = 'Welcome back';
+      formSub.textContent = 'Sign in to continue your wellness journey.';
+      submitBtn.textContent = 'Sign In';
+      footNote.textContent = 'New here? Switch to "Create Account" above.';
+    } else {
+      displayNameField.style.display = 'block';
+      formTitle.textContent = 'Create your account';
+      formSub.textContent = 'Start tracking your habits in under a minute.';
+      submitBtn.textContent = 'Create Account';
+      footNote.textContent = 'Already have an account? Switch to "Sign In" above.';
+    }
+  }
+
+  tabs.forEach(t => t.addEventListener('click', () => setMode(t.dataset.mode)));
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.classList.remove('show');
+    submitBtn.disabled = true;
+
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const displayName = document.getElementById('displayName').value.trim();
+
+    try {
+      const res = await fetch('/api/auth/' + mode, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, displayName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+      window.location.href = '/';
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.classList.add('show');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
