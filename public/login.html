@@ -162,7 +162,7 @@
     const displayName = document.getElementById('displayName').value.trim();
 
     try {
-      const res = await fetch('/api/auth/' + mode, {
+      const res = await fetch(window.location.origin + '/api/auth/' + mode, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, displayName }),
