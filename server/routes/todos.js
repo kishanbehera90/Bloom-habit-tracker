@@ -20,8 +20,15 @@ function shape(row) {
     text: row.text,
     completed: row.completed,
     completedDateKey: row.completed_date_key,
+    taskTime: row.task_time,
     createdAt: row.created_at,
   };
+}
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+function normalizeTime(time) {
+  if (!time) return null;
+  return TIME_RE.test(time) ? time : null;
 }
 
 // Returns: anything still incomplete (carried over from any previous day),
@@ -43,14 +50,43 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { text } = req.body || {};
+    const { text, time } = req.body || {};
     if (!text || !String(text).trim()) return res.status(400).json({ error: 'Task text is required.' });
 
     const result = await pool.query(
-      'INSERT INTO todos (user_id, text) VALUES ($1, $2) RETURNING *',
-      [req.session.userId, String(text).trim()]
+      'INSERT INTO todos (user_id, text, task_time) VALUES ($1, $2, $3) RETURNING *',
+      [req.session.userId, String(text).trim(), normalizeTime(time)]
     );
     res.status(201).json({ todo: shape(result.rows[0]) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Bulk-create from a pasted list. Each item is { text, time? } already parsed client-side.
+router.post('/bulk', async (req, res, next) => {
+  try {
+    const { items } = req.body || {};
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({ error: 'No tasks to add.' });
+    }
+
+    const cleaned = items
+      .map((it) => ({ text: it && it.text ? String(it.text).trim() : '', time: normalizeTime(it && it.time) }))
+      .filter((it) => it.text.length > 0)
+      .slice(0, 200);
+
+    if (!cleaned.length) return res.status(400).json({ error: 'No valid tasks to add.' });
+
+    const inserted = [];
+    for (const item of cleaned) {
+      const result = await pool.query(
+        'INSERT INTO todos (user_id, text, task_time) VALUES ($1, $2, $3) RETURNING *',
+        [req.session.userId, item.text, item.time]
+      );
+      inserted.push(shape(result.rows[0]));
+    }
+    res.status(201).json({ todos: inserted });
   } catch (err) {
     next(err);
   }
@@ -73,11 +109,12 @@ router.put('/:id', async (req, res, next) => {
   try {
     const todo = await getOwnedTodo(req, res);
     if (!todo) return;
-    const { text } = req.body || {};
+    const { text, time } = req.body || {};
     if (!text || !String(text).trim()) return res.status(400).json({ error: 'Task text is required.' });
 
-    const result = await pool.query('UPDATE todos SET text = $1 WHERE id = $2 RETURNING *', [
+    const result = await pool.query('UPDATE todos SET text = $1, task_time = $2 WHERE id = $3 RETURNING *', [
       String(text).trim(),
+      time === undefined ? todo.task_time : normalizeTime(time),
       todo.id,
     ]);
     res.json({ todo: shape(result.rows[0]) });

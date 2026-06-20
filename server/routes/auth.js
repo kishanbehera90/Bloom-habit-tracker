@@ -122,4 +122,24 @@ router.post('/change-password', requireLogin, async (req, res, next) => {
   }
 });
 
+router.post('/reset', requireLogin, async (req, res, next) => {
+  try {
+    const { currentPassword } = req.body || {};
+    if (!currentPassword) return res.status(400).json({ error: 'Enter your password to confirm.' });
+
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.userId]);
+    const user = result.rows[0];
+    const ok = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Incorrect password.' });
+
+    // Deleting habits cascades to their completions automatically.
+    await pool.query('DELETE FROM habits WHERE user_id = $1', [user.id]);
+    await pool.query('DELETE FROM todos WHERE user_id = $1', [user.id]);
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

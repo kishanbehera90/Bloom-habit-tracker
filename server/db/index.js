@@ -28,8 +28,11 @@ async function init() {
       text TEXT NOT NULL,
       completed BOOLEAN NOT NULL DEFAULT false,
       completed_date_key TEXT,
+      task_time TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+
+    ALTER TABLE todos ADD COLUMN IF NOT EXISTS task_time TEXT;
 
     CREATE INDEX IF NOT EXISTS idx_todos_user ON todos(user_id);
 
