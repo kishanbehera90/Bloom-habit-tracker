@@ -1179,9 +1179,20 @@
   /* ---------- To-Do list ---------- */
   let todos = [];
 
+  // Strips a leading list marker like "1.", "2)", "3 -", "-", "*", "•" so pasted
+  // numbered or bulleted lists turn into clean task text.
+  function stripListMarker(line){
+    return line.replace(/^\s*(\d+\s*[.)\-:]|[-*•])\s*/, '');
+  }
+
   // Pulls a time (12h "9am"/"5:30 pm" or 24h "17:30") out of a free-text line,
   // returns the remainder as the task text and the time normalized to 24h "HH:MM".
-  function parseTimeFromLine(line){
+  function cleanTaskText(text, fallback){
+    return (text.replace(/\s+(at|by|on|@)$/i, '').trim()) || fallback.trim();
+  }
+
+  function parseTimeFromLine(rawLine){
+    const line = stripListMarker(rawLine);
     const ampmRe = /\b(1[0-2]|0?[1-9])(:([0-5][0-9]))?\s?([aApP]\.?[mM]\.?)\b/;
     const hm24Re = /\b([01]?[0-9]|2[0-3]):([0-5][0-9])\b/;
 
@@ -1194,14 +1205,14 @@
       if(!isPM && hour === 12) hour = 0;
       const time = String(hour).padStart(2,'0') + ':' + String(min).padStart(2,'0');
       const text = line.replace(m[0], '').replace(/^[\s\-:,–—]+|[\s\-:,–—]+$/g, '').trim();
-      return { time, text: text || line.trim() };
+      return { time, text: cleanTaskText(text, line) };
     }
 
     m = line.match(hm24Re);
     if(m){
       const time = m[1].padStart(2,'0') + ':' + m[2];
       const text = line.replace(m[0], '').replace(/^[\s\-:,–—]+|[\s\-:,–—]+$/g, '').trim();
-      return { time, text: text || line.trim() };
+      return { time, text: cleanTaskText(text, line) };
     }
 
     return { time: null, text: line.trim() };
